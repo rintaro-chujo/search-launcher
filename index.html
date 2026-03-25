@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search Launcher</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f11;
+      color: #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .card {
+      background: #1a1a1f;
+      border: 1px solid #2a2a35;
+      border-radius: 16px;
+      padding: 32px 36px;
+      max-width: 560px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: #555;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .query-display {
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 24px;
+      word-break: break-all;
+    }
+
+    .scrapbox-text {
+      background: #111116;
+      border: 1px solid #2a2a35;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+    }
+
+    .scrapbox-text .label {
+      font-size: 11px;
+      color: #444;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .scrapbox-text code {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 13px;
+      color: #a8d8a8;
+      word-break: break-all;
+      line-height: 1.7;
+    }
+
+    .status-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 11px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge.success { background: #1a3a1a; color: #6bcf7f; border: 1px solid #2a4a2a; }
+    .badge.error   { background: #3a1a1a; color: #cf6b6b; border: 1px solid #4a2a2a; }
+    .badge.pending { background: #2a2a1a; color: #cfb06b; border: 1px solid #3a3a2a; }
+
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    .link-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .link-row a {
+      flex: 1;
+      text-align: center;
+      padding: 11px 10px;
+      border-radius: 10px;
+      background: #23232e;
+      color: #888;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      border: 1px solid #33333f;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .link-row a:hover { color: #ddd; border-color: #555; }
+
+    .hint {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #3a3a4a;
+      line-height: 1.6;
+    }
+
+    #no-query { text-align: center; }
+    #no-query h2 { font-size: 18px; margin-bottom: 12px; color: #777; }
+
+    code.url {
+      display: block;
+      margin-top: 14px;
+      background: #111116;
+      border: 1px solid #2a2a35;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-family: "SF Mono", monospace;
+      font-size: 12px;
+      color: #a8d8a8;
+      word-break: break-all;
+    }
+
+    p.desc { color: #555; font-size: 14px; line-height: 1.8; margin-top: 14px; }
+  </style>
+</head>
+<body>
+
+<div class="card" id="launcher" style="display:none">
+  <h1>Search Launcher</h1>
+  <div class="query-display" id="queryDisplay"></div>
+
+  <div class="scrapbox-text">
+    <div class="label">Scrapbox に追記するテキスト</div>
+    <code id="scrapboxPreview"></code>
+  </div>
+
+  <div class="status-row" id="statusRow"></div>
+
+  <div class="link-row">
+    <a id="googleLink" href="#" target="_blank">🔍 Google 検索</a>
+    <a id="scrapboxLink" href="#" target="_blank">📓 Scrapbox デイリーノート</a>
+  </div>
+
+  <p class="hint">タブが開かない場合は上のリンクから手動で開いてください。</p>
+</div>
+
+<div class="card" id="no-query" style="display:none">
+  <h2>Search Launcher</h2>
+  <p class="desc">
+    Arc / Chrome のカスタム検索エンジンとして登録して使います。<br>
+    キーワードを入力すると Google 検索と Scrapbox デイリーノートへの追記を同時に行います。
+  </p>
+  <code class="url" id="selfUrl"></code>
+</div>
+
+<script>
+  // ---- Utilities ----
+
+  function getTodayJST() {
+    const now = new Date();
+    const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const y = jst.getUTCFullYear();
+    const m = String(jst.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(jst.getUTCDate()).padStart(2, '0');
+    return `${y}${m}${d}`;
+  }
+
+  function hasJapanese(text) {
+    return /[\u3040-\u30FF\u3400-\u9FFF\uF900-\uFAFF\uFF66-\uFF9F]/.test(text);
+  }
+
+  function buildScrapboxText(query, googleUrl) {
+    let tags;
+    if (hasJapanese(query)) {
+      // 日本語: スペースごとに個別タグ
+      tags = query.trim().split(/\s+/).map(w => `[${w}]`).join(' ');
+    } else {
+      // 英語: まとめて1タグ
+      tags = `[${query.trim()}]`;
+    }
+    return `${tags} [Web ${googleUrl}]`;
+  }
+
+  function addBadge(icon, text, type) {
+    const row = document.getElementById('statusRow');
+    const badge = document.createElement('span');
+    badge.className = `badge ${type}`;
+    badge.innerHTML = `<span class="dot"></span>${icon} ${text}`;
+    row.appendChild(badge);
+  }
+
+  // ---- Main ----
+
+  const params = new URLSearchParams(window.location.search);
+  const query = params.get('q') || '';
+
+  if (!query) {
+    document.getElementById('no-query').style.display = 'block';
+    document.getElementById('selfUrl').textContent =
+      location.origin + location.pathname + '?q=%s';
+  } else {
+    document.getElementById('launcher').style.display = 'block';
+
+    const googleUrl = 'https://www.google.com/search?q=' + encodeURIComponent(query);
+    const todayPage = getTodayJST();
+    const scrapboxText = buildScrapboxText(query, googleUrl);
+
+    // ?body= に渡すテキスト（先頭に改行を入れて既存コンテンツと分ける）
+    const bodyParam = encodeURIComponent('\n' + scrapboxText);
+    const scrapboxUrl =
+      'https://scrapbox.io/rchujo/' + todayPage + '?body=' + bodyParam;
+
+    // UI 更新
+    document.getElementById('queryDisplay').textContent = query;
+    document.getElementById('scrapboxPreview').textContent = scrapboxText;
+    document.getElementById('googleLink').href = googleUrl;
+    document.getElementById('scrapboxLink').href = scrapboxUrl;
+
+    // Google を新しいタブで開く（window.open は1回だけなのでブロックされにくい）
+    const gWin = window.open(googleUrl, '_blank');
+    if (gWin) {
+      addBadge('🔍', 'Google 検索を開きました', 'success');
+    } else {
+      addBadge('🔍', 'Google（手動で開いてください）', 'pending');
+    }
+
+    // Scrapbox は現在のタブをそのままリダイレクト（popup 許可不要）
+    addBadge('📓', 'Scrapbox に追記します…', 'success');
+    setTimeout(() => { window.location.href = scrapboxUrl; }, 600);
+  }
+</script>
+
+</body>
+</html>
